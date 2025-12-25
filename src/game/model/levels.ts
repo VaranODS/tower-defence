@@ -12,6 +12,7 @@ export type Palette = {
 export type LevelDef = {
     id: number;
     name: string;
+    wavesPerLevel: number;
     palette: Palette;
     buildPath: (grid: GridSize) => Cell[];
 };
@@ -21,6 +22,7 @@ const LEVELS: Record<number, LevelDef> = {
     1: {
         id: 1,
         name: "Тренировочный полигон",
+        wavesPerLevel: 6,
         palette: {
             bg: "#0b1020",
             grid: "rgba(255,255,255,0.10)",
@@ -35,6 +37,7 @@ const LEVELS: Record<number, LevelDef> = {
     2: {
         id: 2,
         name: "Песчаные барханы",
+        wavesPerLevel: 7,
         palette: {
             bg: "#1b140c",
             grid: "rgba(255,240,200,0.10)",
@@ -49,6 +52,7 @@ const LEVELS: Record<number, LevelDef> = {
     3: {
         id: 3,
         name: "Неоновый квартал",
+        wavesPerLevel: 8,
         palette: {
             bg: "#070812",
             grid: "rgba(190,170,255,0.10)",

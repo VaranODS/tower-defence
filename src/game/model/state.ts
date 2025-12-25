@@ -5,16 +5,19 @@
     Cell,
     Tower,
     Enemy,
-    EnemyType,
     Bullet,
     WaveStatus,
 } from "./types";
 import {cellKey, inBounds} from "./grid";
 import {getLevelDef} from "./levels";
 import {makeId} from "./id";
-import {createEnemy} from "./enemies";
+import {createEnemy, createBossTank} from "./enemies";
 import {getWaveQueue} from "./waves";
 import {posOnPath, cellCenter} from "./coords";
+import {getTowerParams} from "./towerParams";
+
+import type {SpawnUnit} from "./waves";
+import {loadProgress} from "./persist";
 
 export const DEFAULT_GRID: GridSize = {cols: 12, rows: 18};
 
@@ -24,62 +27,13 @@ export const TOWER_COST: Record<TowerType, number> = {
     SNIPER: 90,
 };
 
-// // Башня "Пушка" для MVP
-// const CANNON = {
-//     rangeCells: 2.6,
-//     damage: 12,
-//     fireCooldownSec: 0.6,
-//     bulletSpeedCellsPerSec: 8.5,
-// };
-
-type TowerParams = {
-    rangeCells: number;
-    damage: number;
-    fireCooldownSec: number;
-    bulletSpeedCellsPerSec: number;
-
-    slowMul?: number;
-    slowDurationSec?: number;
-
-    critChance?: number; // 0..1
-    critMult?: number;   // например 2
-};
-
-function getTowerParams(type: TowerType, level: 1 | 2 | 3): TowerParams {
-    if (type === "CANNON") {
-        // как было
-        const dmg = level === 1 ? 12 : level === 2 ? Math.round(12 * 1.25) : Math.round(12 * 1.25 * 1.25);
-        const cd = level === 3 ? 0.6 * 0.85 : 0.6;
-        const range = level >= 2 ? 2.6 * 1.1 : 2.6;
-        return { rangeCells: range, damage: dmg, fireCooldownSec: cd, bulletSpeedCellsPerSec: 8.5 };
-    }
-
-    if (type === "FROST") {
-        // базовые: 2.2 range, dmg 6, cd 0.8, slow -35% на 1.2с
-        if (level === 1) {
-            return { rangeCells: 2.2, damage: 6, fireCooldownSec: 0.8, bulletSpeedCellsPerSec: 8.0, slowMul: 0.65, slowDurationSec: 1.2 };
-        }
-        if (level === 2) {
-            return { rangeCells: 2.2, damage: 6, fireCooldownSec: 0.8, bulletSpeedCellsPerSec: 8.0, slowMul: 0.55, slowDurationSec: 1.4 };
-        }
-        // level 3
-        return { rangeCells: 2.2, damage: Math.round(6 * 1.2), fireCooldownSec: 0.8, bulletSpeedCellsPerSec: 8.0, slowMul: 0.45, slowDurationSec: 1.4 };
-    }
-
-    // SNIPER
-    if (level === 1) {
-        return { rangeCells: 4.2, damage: 35, fireCooldownSec: 1.4, bulletSpeedCellsPerSec: 12.0 };
-    }
-    if (level === 2) {
-        return { rangeCells: 4.2, damage: Math.round(35 * 1.3), fireCooldownSec: 1.4, bulletSpeedCellsPerSec: 12.0 };
-    }
-    return { rangeCells: 4.2, damage: 35, fireCooldownSec: 1.4, bulletSpeedCellsPerSec: 12.0, critChance: 0.15, critMult: 2 };
-}
+const SELL_REFUND_MULT = 0.7;  // возврат = 70% от вложенного
 
 export function createInitialState(): GameState {
     const grid = DEFAULT_GRID;
 
-    const levelId = 1;
+    const p = loadProgress();
+    const levelId = p?.levelId ?? 1;
     const level = getLevelDef(levelId);
 
     return {
@@ -101,9 +55,10 @@ export function createInitialState(): GameState {
             spawnIntervalSec: 0.6,
         },
 
-        stats: {baseHp: 20, money: 120, wave: 1},
+        stats: {baseHp: 20, money: 120, waveInLevel: 1},
         mode: "IDLE",
         placement: {selectedTower: null},
+        selectedTowerId: null,
     };
 }
 
@@ -144,12 +99,14 @@ export function placeTower(state: GameState, cell: Cell): GameState {
         level: 1,
         cell,
         cooldownSec: 0,
+        invested: cost,
     };
 
     return {
         ...state,
         towers: [...state.towers, tower],
         stats: {...state.stats, money: state.stats.money - cost},
+        placement: { selectedTower: null },
     };
 }
 
@@ -168,7 +125,9 @@ export function startWave(state: GameState): GameState {
     if (state.mode === "GAME_OVER") return state;
     if (state.waveState.status !== "READY") return state;
 
-    const queue = getWaveQueue(state.stats.wave);
+    const queue = getWaveQueue(state.stats.waveInLevel);
+    const interval = Math.max(0.35, 0.65 - state.stats.waveInLevel * 0.02);
+
     return {
         ...state,
         mode: "RUNNING",
@@ -177,6 +136,7 @@ export function startWave(state: GameState): GameState {
             status: "SPAWNING",
             queue,
             spawnTimerSec: 0,
+            spawnIntervalSec: interval,
         },
     };
 }
@@ -213,8 +173,14 @@ function spawnStep(state: GameState, dtSec: number): GameState {
     const enemies = state.enemies.slice();
 
     while (timer <= 0 && queue.length > 0) {
-        const type = queue.shift() as EnemyType;
-        enemies.push(createEnemy(type));
+        const unit = queue.shift() as SpawnUnit;
+
+        if (unit.type === "TANK_BOSS") {
+            enemies.push(createBossTank(unit.hpMult, unit.speedMult, unit.rewardMult));
+        } else {
+            enemies.push(createEnemy(unit.type));
+        }
+
         timer += state.waveState.spawnIntervalSec;
     }
 
@@ -246,7 +212,7 @@ function moveEnemies(state: GameState, dtSec: number): GameState {
             continue;
         }
 
-        enemies.push({...e, progress: newProg, slowTimerSec: slowTimer, slowMul });
+        enemies.push({...e, progress: newProg, slowTimerSec: slowTimer, slowMul});
     }
 
     return {...state, enemies, stats: {...state.stats, baseHp}};
@@ -411,17 +377,30 @@ function waveCompletion(state: GameState): GameState {
     const spawningDone = state.waveState.status !== "SPAWNING" && state.waveState.queue.length === 0;
     const noEnemies = state.enemies.length === 0;
 
-    if (spawningDone && noEnemies) {
+    if (!(spawningDone && noEnemies)) return state;
+
+    const level = getLevelDef(state.levelId);
+    const nextWave = state.stats.waveInLevel + 1;
+
+    // волна закончилась
+    if (nextWave > level.wavesPerLevel) {
+        // уровень пройден
         return {
             ...state,
-            waveState: {...state.waveState, status: "READY", queue: [], spawnTimerSec: 0},
-            stats: {...state.stats, wave: state.stats.wave + 1},
-            mode: "PAUSED",
+            waveState: { ...state.waveState, status: "READY", queue: [], spawnTimerSec: 0 },
+            mode: "LEVEL_COMPLETE",
         };
     }
 
-    return state;
+    // следующий раунд
+    return {
+        ...state,
+        waveState: { ...state.waveState, status: "READY", queue: [], spawnTimerSec: 0 },
+        stats: { ...state.stats, waveInLevel: nextWave },
+        mode: "PAUSED",
+    };
 }
+
 
 function norm(x: number, y: number): { x: number; y: number } | null {
     const len = Math.hypot(x, y);
@@ -482,9 +461,116 @@ function pickTargetInRangeByPriority(
         }
 
         if (!best || scoreA > best.scoreA || (scoreA === best.scoreA && scoreB > best.scoreB)) {
-            best = { e, scoreA, scoreB };
+            best = {e, scoreA, scoreB};
         }
     }
 
     return best?.e ?? null;
 }
+
+export function setSelectedTowerId(state: GameState, id: string | null): GameState {
+    return {...state, selectedTowerId: id};
+}
+
+export function clearPlacement(state: GameState): GameState {
+    return {...state, placement: {selectedTower: null}};
+}
+
+export function getUpgradeCost(type: TowerType, nextLevel: 2 | 3): number {
+    const base =TOWER_COST[type];
+    const raw = nextLevel === 2 ? base * 1.2 : base * 1.6;
+    return Math.ceil(raw);
+}
+
+export function canUpgradeSelectedTower(state: GameState): { ok: boolean; reason?: string; cost?: number } {
+    const id = state.selectedTowerId;
+    if (!id) return {ok: false, reason: "Башня не выбрана"};
+
+    const t = state.towers.find(x => x.id === id);
+    if (!t) return {ok: false, reason: "Башня не найдена"};
+    if (t.level >= 3) return {ok: false, reason: "Макс. уровень"};
+
+    const nextLevel = (t.level + 1) as 2 | 3;
+    const cost = getUpgradeCost(t.type, nextLevel);
+
+    if (state.stats.money < cost) return {ok: false, reason: "Не хватает денег", cost};
+
+    return {ok: true, cost};
+}
+
+export function upgradeSelectedTower(state: GameState): GameState {
+    const id = state.selectedTowerId;
+    if (!id) return state;
+
+    const idx = state.towers.findIndex(x => x.id === id);
+    if (idx === -1) return state;
+
+    const t = state.towers[idx];
+    if (t.level >= 3) return state;
+
+    const nextLevel = (t.level + 1) as 2 | 3;
+    const cost = getUpgradeCost(t.type, nextLevel);
+
+    if (state.stats.money < cost) return state;
+
+    const updated: Tower = {
+        ...t,
+        level: nextLevel,
+        invested: t.invested + cost,
+    };
+
+    const towers = state.towers.slice();
+    towers[idx] = updated;
+
+    return {
+        ...state,
+        towers,
+        stats: {...state.stats, money: state.stats.money - cost},
+    };
+}
+
+export function sellSelectedTower(state: GameState): GameState {
+    const id = state.selectedTowerId;
+    if (!id) return state;
+
+    const t = state.towers.find(x => x.id === id);
+    if (!t) return {...state, selectedTowerId: null};
+
+    const refund = Math.floor(t.invested * SELL_REFUND_MULT);
+
+    return {
+        ...state,
+        towers: state.towers.filter(x => x.id !== id),
+        stats: {...state.stats, money: state.stats.money + refund},
+        selectedTowerId: null,
+    };
+}
+
+export function loadLevel(state: GameState, levelId: number): GameState {
+    const level = getLevelDef(levelId);
+
+    return {
+        ...state,
+        levelId,
+        levelName: level.name,
+        palette: level.palette,
+        path: level.buildPath(state.grid),
+
+        towers: [],
+        enemies: [],
+        bullets: [],
+        selectedTowerId: null,
+
+        waveState: { ...state.waveState, status: "READY", queue: [], spawnTimerSec: 0 },
+
+        stats: { ...state.stats, waveInLevel: 1 },
+        mode: "PAUSED",
+        placement: { selectedTower: null },
+    };
+}
+
+export function nextLevel(state: GameState): GameState {
+    const nextId = state.levelId + 1;
+    return loadLevel(state, nextId);
+}
+

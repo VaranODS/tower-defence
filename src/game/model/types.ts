@@ -1,3 +1,5 @@
+import type { SpawnUnit } from "./waves";
+
 export type GridSize = { cols: number; rows: number };
 
 export type Cell = { col: number; row: number };
@@ -9,9 +11,8 @@ export type Tower = {
     type: TowerType;
     level: 1 | 2 | 3;
     cell: Cell;
-
-    // для стрельбы
-    cooldownSec: number;
+    cooldownSec: number; // для стрельбы
+    invested: number; // сколько денег вложено (база + апгрейды)
 };
 
 export type EnemyType = "RUNNER" | "TANK" | "SHIELDED";
@@ -35,6 +36,8 @@ export type Enemy = {
 
     slowMul: number;        // 1.0 = нет замедления, 0.65 = -35% скорости
     slowTimerSec: number;   // сколько ещё действует
+
+    isBoss: boolean;
 };
 
 export type Bullet = {
@@ -63,10 +66,10 @@ export type Bullet = {
 export type GameStats = {
     baseHp: number;
     money: number;
-    wave: number;
+    waveInLevel: number;
 };
 
-export type GameMode = "IDLE" | "RUNNING" | "PAUSED" | "GAME_OVER";
+export type GameMode = "IDLE" | "RUNNING" | "PAUSED" | "LEVEL_COMPLETE" | "GAME_OVER";
 
 export type Placement = {
     selectedTower: TowerType | null;
@@ -84,10 +87,11 @@ export type WaveStatus = "READY" | "SPAWNING" | "IN_PROGRESS";
 
 export type WaveState = {
     status: WaveStatus;
-    queue: EnemyType[];        // кого осталось заспавнить
+    queue: SpawnUnit[];        // кого осталось заспавнить
     spawnTimerSec: number;     // таймер между спавнами
     spawnIntervalSec: number;  // например 0.6
 };
+
 export type GameState = {
     levelId: number;
     levelName: string;
@@ -104,4 +108,6 @@ export type GameState = {
     stats: GameStats;
     mode: GameMode;
     placement: Placement;
+
+    selectedTowerId: string | null; // выбранная на поле башня для меню
 };

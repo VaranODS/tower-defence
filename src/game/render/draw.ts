@@ -4,7 +4,8 @@ import { cellToWorld } from "./metrics";
 import type { Metrics} from "./metrics"
 import { canPlaceTower } from "../model/state";
 import { TOWER_VIEW } from "../ui/towerView";
-import { posOnPath } from "../model/coords";
+import { cellCenter, posOnPath } from "../model/coords";
+import { getTowerParams} from "../model/towerParams";
 
 
 export function draw(ctx: CanvasRenderingContext2D, state: GameState, m: Metrics, hoverCell: Cell | null) {
@@ -18,6 +19,7 @@ export function draw(ctx: CanvasRenderingContext2D, state: GameState, m: Metrics
     drawPath(ctx, state, m);
     drawEnemies(ctx, state, m);
     drawBullets(ctx, state, m);
+    drawRange(ctx, state, m, hoverCell);
     drawTowers(ctx, state, m);
 
     if (hoverCell) drawHover(ctx, state, m, hoverCell);
@@ -86,14 +88,21 @@ function drawEnemies(ctx: CanvasRenderingContext2D, state: GameState, m: Metrics
         const x = m.boardX + p.x * m.cellSize;
         const y = m.boardY + p.y * m.cellSize;
 
-        const r = Math.max(6 * m.dpr, Math.floor(m.cellSize * 0.22));
+        const baseR = Math.max(6 * m.dpr, Math.floor(m.cellSize * 0.22));
+        const r = e.isBoss ? Math.floor(baseR * 1.55) : baseR;
         ctx.save();
 
-        ctx.fillStyle = e.type === "TANK"
-            ? "rgba(255,160,160,0.85)"
-            : e.type === "SHIELDED"
-                ? "rgba(160,200,255,0.85)"
-                : "rgba(200,255,180,0.85)";
+        if (e.isBoss) {
+            // босс: более "тяжёлый" цвет
+            ctx.fillStyle = "rgba(255, 90, 120, 0.92)";
+        } else {
+            ctx.fillStyle =
+                e.type === "TANK"
+                    ? "rgba(255,160,160,0.85)"
+                    : e.type === "SHIELDED"
+                        ? "rgba(160,200,255,0.85)"
+                        : "rgba(200,255,180,0.85)";
+        }
 
         ctx.beginPath();
         ctx.arc(x, y, r, 0, Math.PI * 2);
@@ -129,18 +138,60 @@ function drawEnemies(ctx: CanvasRenderingContext2D, state: GameState, m: Metrics
             ctx.restore();
         }
 
-        // HP bar
-        const w = r * 2.4;
-        const h = Math.max(3 * m.dpr, Math.floor(r * 0.22));
-        const bx = x - w / 2;
-        const by = y - r - h - 4 * m.dpr;
 
-        ctx.fillStyle = "rgba(0,0,0,0.35)";
+        // обводка (у босса — жирнее)
+        ctx.strokeStyle = e.isBoss ? "rgba(255,255,255,0.35)" : "rgba(0,0,0,0.18)";
+        ctx.lineWidth = e.isBoss ? Math.max(3 * m.dpr, Math.floor(r * 0.16)) : Math.max(2 * m.dpr, 2);
+        ctx.beginPath();
+        ctx.arc(x, y, r, 0, Math.PI * 2);
+        ctx.stroke();
+
+        // метка босса: 👑 + текст BOSS
+        if (e.isBoss) {
+            ctx.fillStyle = "rgba(255,255,255,0.95)";
+            ctx.font = `${Math.floor(r * 0.85)}px system-ui, "Apple Color Emoji", "Segoe UI Emoji"`;
+            ctx.textAlign = "center";
+            ctx.textBaseline = "bottom";
+            ctx.fillText("👑", x, y - r * 0.95);
+
+            // ctx.font = `${Math.floor(r * 0.38)}px system-ui`;
+            // ctx.textBaseline = "top";
+            // ctx.fillText("BOSS", x, y + r * 0.65);
+
+            // крупнее + с обводкой, чтобы читалось на любом фоне
+            const bossFont = Math.max(14 * m.dpr, Math.floor(r * 0.60));
+            ctx.font = `${bossFont}px system-ui`;
+            ctx.textAlign = "center";
+            ctx.textBaseline = "top";
+
+            // обводка
+            ctx.lineWidth = Math.max(3 * m.dpr, Math.floor(bossFont * 0.12));
+            ctx.strokeStyle = "rgba(0,0,0,0.55)";
+            ctx.strokeText("BOSS", x, y + r * 0.62);
+
+            // заливка
+            ctx.fillStyle = "rgba(255,255,255,0.95)";
+            ctx.fillText("BOSS", x, y + r * 0.62);
+        }
+
+        // ===== HP / Shield bars =====
+        const w = e.isBoss ? r * 3.2 : r * 2.4;
+        const h = Math.max(4 * m.dpr, Math.floor(r * (e.isBoss ? 0.22 : 0.20)));
+        const bx = x - w / 2;
+        const by = y - r - h - (e.isBoss ? 8 : 4) * m.dpr;
+
+        // фон полоски
+        ctx.fillStyle = "rgba(0,0,0,0.40)";
         ctx.fillRect(bx, by, w, h);
 
         const hpRatio = e.hp / e.maxHp;
-        ctx.fillStyle = "rgba(120,255,160,0.85)";
+        ctx.fillStyle = e.isBoss ? "rgba(255, 240, 120, 0.92)" : "rgba(120,255,160,0.85)";
         ctx.fillRect(bx, by, w * hpRatio, h);
+
+        // рамка полоски
+        ctx.strokeStyle = "rgba(255,255,255,0.22)";
+        ctx.lineWidth = Math.max(m.dpr, 1);
+        ctx.strokeRect(bx, by, w, h);
 
         // Shield bar (если есть)
         if (e.maxShield > 0) {
@@ -151,6 +202,9 @@ function drawEnemies(ctx: CanvasRenderingContext2D, state: GameState, m: Metrics
             const sRatio = e.shield / e.maxShield;
             ctx.fillStyle = "rgba(160,200,255,0.85)";
             ctx.fillRect(bx, sy, w * sRatio, h);
+
+            ctx.strokeStyle = "rgba(255,255,255,0.18)";
+            ctx.strokeRect(bx, sy, w, h);
         }
 
         ctx.restore();
@@ -273,5 +327,42 @@ function drawStartFinish(ctx: CanvasRenderingContext2D, state: GameState, m: Met
     ctx.fillStyle = "rgba(255,120,120,0.85)";
     ctx.fillText("OUT", e.x + m.cellSize / 2, e.y + m.cellSize / 2);
 
+    ctx.restore();
+}
+
+function drawRange(ctx: CanvasRenderingContext2D, state: GameState, m: Metrics, hoverCell: Cell | null) {
+    // 1) если выбрана башня на поле — показываем её радиус
+    if (state.selectedTowerId) {
+        const t = state.towers.find(x => x.id === state.selectedTowerId);
+        if (t) {
+            const p = getTowerParams(t.type, t.level);
+            const c = cellCenter(t.cell);
+            drawRangeCircle(ctx, m, c.x, c.y, p.rangeCells);
+        }
+    }
+
+    // 2) если выбран тип башни и есть hoverCell — показываем радиус предполагаемой установки
+    const selectedType = state.placement.selectedTower;
+    if (selectedType && hoverCell) {
+        // радиус будущей башни (уровень 1)
+        const p = getTowerParams(selectedType, 1);
+        const c = cellCenter(hoverCell);
+        drawRangeCircle(ctx, m, c.x, c.y, p.rangeCells);
+    }
+}
+
+function drawRangeCircle(ctx: CanvasRenderingContext2D, m: Metrics, cxCells: number, cyCells: number, rangeCells: number) {
+    const cx = m.boardX + cxCells * m.cellSize;
+    const cy = m.boardY + cyCells * m.cellSize;
+    const r = rangeCells * m.cellSize;
+
+    ctx.save();
+    ctx.strokeStyle = "rgba(255,255,255,0.25)";
+    ctx.lineWidth = Math.max(2 * m.dpr, Math.floor(m.cellSize * 0.05));
+    ctx.setLineDash([6 * m.dpr, 6 * m.dpr]);
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.setLineDash([]);
     ctx.restore();
 }

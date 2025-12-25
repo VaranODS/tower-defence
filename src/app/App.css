@@ -61,6 +61,10 @@ button:active {
   transform: translateY(1px);
 }
 
+button:disabled {
+  opacity: 0.45;
+}
+
 button[aria-pressed="true"] {
   outline: 2px solid rgba(120, 220, 255, 0.9);
   background: rgba(120, 220, 255, 0.18);

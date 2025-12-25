@@ -5,7 +5,7 @@ import { draw } from "../render/draw";
 import { startLoop } from "../engine/gameLoop";
 import { getCanvasPointerPos } from "../engine/input";
 import { inBounds } from "../model/grid";
-import {placeTower, canPlaceTower, step} from "../model/state";
+import {placeTower, canPlaceTower, step, towerAt, setSelectedTowerId, clearPlacement} from "../model/state";
 
 type Props = {
     state: GameState;
@@ -120,23 +120,38 @@ export function GameCanvas({ state, setState }: Props) {
             const cell = worldToCell(m, p.x, p.y);
             if (!cell || !inBounds(state.grid, cell)) return;
 
+            // 1) если тапнули по башне — выбираем её
+            const tappedTower = towerAt(state, cell);
+            if (tappedTower) {
+                setState(prev => ({
+                    ...setSelectedTowerId(prev, tappedTower.id), placement: { selectedTower: null }
+                }));
+                return;
+            }
+
+            // если тапнули мимо башни — снимаем выбор башни
+            setState(prev => setSelectedTowerId(prev, null));
+
+            // 2) если выбран тип башни — пробуем поставить
+            const selectedType = state.placement.selectedTower;
+            if (selectedType) {
+                const check = canPlaceTower(state, cell);
+
+                if (!check.ok) {
+                    showReason(check.reason ?? "Нельзя строить", 1500);
+                    return;
+                }
+
+                showReason("Построено", 800);
+                setState(prev => placeTower(prev, cell));
+                return;
+            }
+
+            // 3) иначе — просто очистим режим установки (на всякий)
+            setState(prev => clearPlacement(prev));
+
             setHoverCell(cell);
 
-            const selected = state.placement.selectedTower;
-            if (!selected) {
-                showReason("Выбери башню", 1200);
-                return;
-            }
-
-            const check = canPlaceTower(state, cell);
-
-            if (!check.ok) {
-                showReason(check.reason ?? "Нельзя строить", 1500);
-                return;
-            }
-
-            showReason("Построено", 800);
-            setState(prev => placeTower(prev, cell));
         };
 
         canvas.addEventListener("pointermove", onMove, { passive: false });

@@ -30,5 +30,28 @@ export function createEnemy(type: EnemyType): Enemy {
         progress: 0,
         slowMul: 1,
         slowTimerSec: 0,
+        isBoss: false,
+    };
+}
+
+export function createBossTank(hpMult: number, speedMult: number, rewardMult: number): Enemy {
+    const base = DEF.TANK;
+    const hp = Math.round(base.hp * hpMult);
+    const speed = base.speed * speedMult;
+    const reward = Math.round(base.reward * rewardMult);
+
+    return {
+        id: makeId("enemy"),
+        type: "TANK",
+        hp,
+        maxHp: hp,
+        shield: 0,
+        maxShield: 0,
+        speedCellsPerSec: speed,
+        reward,
+        progress: 0,
+        slowMul: 1,
+        slowTimerSec: 0,
+        isBoss: true,
     };
 }
