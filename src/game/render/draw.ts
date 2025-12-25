@@ -4,6 +4,8 @@ import { cellToWorld } from "./metrics";
 import type { Metrics} from "./metrics"
 import { canPlaceTower } from "../model/state";
 import { TOWER_VIEW } from "../ui/towerView";
+import { posOnPath } from "../model/coords";
+
 
 export function draw(ctx: CanvasRenderingContext2D, state: GameState, m: Metrics, hoverCell: Cell | null) {
     ctx.clearRect(0, 0, m.canvasW, m.canvasH);
@@ -14,6 +16,8 @@ export function draw(ctx: CanvasRenderingContext2D, state: GameState, m: Metrics
 
     drawGrid(ctx, state, m);
     drawPath(ctx, state, m);
+    drawEnemies(ctx, state, m);
+    drawBullets(ctx, state, m);
     drawTowers(ctx, state, m);
 
     if (hoverCell) drawHover(ctx, state, m, hoverCell);
@@ -24,7 +28,7 @@ export function draw(ctx: CanvasRenderingContext2D, state: GameState, m: Metrics
 function drawGrid(ctx: CanvasRenderingContext2D, state: GameState, m: Metrics) {
     ctx.save();
     ctx.strokeStyle = state.palette.grid;
-    ctx.lineWidth = 1 * m.dpr;
+    ctx.lineWidth = 1.05 * m.dpr;
 
     for (let r = 0; r <= state.grid.rows; r++) {
         const y = m.boardY + r * m.cellSize;
@@ -73,6 +77,99 @@ function drawPath(ctx: CanvasRenderingContext2D, state: GameState, m: Metrics) {
         else ctx.lineTo(cx, cy);
     }
     ctx.stroke();
+    ctx.restore();
+}
+
+function drawEnemies(ctx: CanvasRenderingContext2D, state: GameState, m: Metrics) {
+    for (const e of state.enemies) {
+        const p = posOnPath(state.path, e.progress);
+        const x = m.boardX + p.x * m.cellSize;
+        const y = m.boardY + p.y * m.cellSize;
+
+        const r = Math.max(6 * m.dpr, Math.floor(m.cellSize * 0.22));
+        ctx.save();
+
+        ctx.fillStyle = e.type === "TANK"
+            ? "rgba(255,160,160,0.85)"
+            : e.type === "SHIELDED"
+                ? "rgba(160,200,255,0.85)"
+                : "rgba(200,255,180,0.85)";
+
+        ctx.beginPath();
+        ctx.arc(x, y, r, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Визуальный эффект замедления
+        if (e.slowTimerSec > 0) {
+            // интенсивность (чем ближе к концу — тем слабее)
+            const k = Math.max(0, Math.min(1, e.slowTimerSec / 1.5));
+
+            ctx.save();
+
+            // лёгкая голубая "аура"
+            ctx.fillStyle = `rgba(140, 200, 255, ${0.10 + 0.10 * k})`;
+            ctx.beginPath();
+            ctx.arc(x, y, r * 1.55, 0, Math.PI * 2);
+            ctx.fill();
+
+            // контур кольца
+            ctx.strokeStyle = `rgba(140, 200, 255, ${0.45 + 0.25 * k})`;
+            ctx.lineWidth = Math.max(2 * m.dpr, Math.floor(r * 0.18));
+            ctx.beginPath();
+            ctx.arc(x, y, r * 1.55, 0, Math.PI * 2);
+            ctx.stroke();
+
+            // снежинка-иконка над врагом
+            ctx.fillStyle = "rgba(220, 245, 255, 0.95)";
+            ctx.font = `${Math.floor(r * 1.2)}px system-ui, "Apple Color Emoji", "Segoe UI Emoji"`;
+            ctx.textAlign = "center";
+            ctx.textBaseline = "bottom";
+            ctx.fillText("❄️", x, y - r * 1.65);
+
+            ctx.restore();
+        }
+
+        // HP bar
+        const w = r * 2.4;
+        const h = Math.max(3 * m.dpr, Math.floor(r * 0.22));
+        const bx = x - w / 2;
+        const by = y - r - h - 4 * m.dpr;
+
+        ctx.fillStyle = "rgba(0,0,0,0.35)";
+        ctx.fillRect(bx, by, w, h);
+
+        const hpRatio = e.hp / e.maxHp;
+        ctx.fillStyle = "rgba(120,255,160,0.85)";
+        ctx.fillRect(bx, by, w * hpRatio, h);
+
+        // Shield bar (если есть)
+        if (e.maxShield > 0) {
+            const sy = by - h - 3 * m.dpr;
+            ctx.fillStyle = "rgba(0,0,0,0.35)";
+            ctx.fillRect(bx, sy, w, h);
+
+            const sRatio = e.shield / e.maxShield;
+            ctx.fillStyle = "rgba(160,200,255,0.85)";
+            ctx.fillRect(bx, sy, w * sRatio, h);
+        }
+
+        ctx.restore();
+    }
+}
+
+function drawBullets(ctx: CanvasRenderingContext2D, state: GameState, m: Metrics) {
+    ctx.save();
+    ctx.fillStyle = "rgba(255,255,255,0.9)";
+
+    for (const b of state.bullets) {
+        const x = m.boardX + b.x * m.cellSize;
+        const y = m.boardY + b.y * m.cellSize;
+        const r = Math.max(2 * m.dpr, Math.floor(m.cellSize * 0.06));
+        ctx.beginPath();
+        ctx.arc(x, y, r, 0, Math.PI * 2);
+        ctx.fill();
+    }
+
     ctx.restore();
 }
 

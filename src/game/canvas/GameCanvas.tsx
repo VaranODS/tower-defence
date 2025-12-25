@@ -5,7 +5,7 @@ import { draw } from "../render/draw";
 import { startLoop } from "../engine/gameLoop";
 import { getCanvasPointerPos } from "../engine/input";
 import { inBounds } from "../model/grid";
-import { placeTower, canPlaceTower } from "../model/state";
+import {placeTower, canPlaceTower, step} from "../model/state";
 
 type Props = {
     state: GameState;
@@ -69,7 +69,13 @@ export function GameCanvas({ state, setState }: Props) {
         const ctx = canvas.getContext("2d");
         if (!ctx) return;
 
-        const loop = startLoop(() => {
+        const loop = startLoop((dtMs) => {
+            const dtSec = Math.min(0.05, dtMs / 1000);
+
+            //Обновление мира
+            setState(prev => step(prev, dtSec));
+
+            // рисование будет на следующем рендере с новым state
             const m = computeMetrics(state.grid, cssSize.w, cssSize.h, dpr);
             if (canvas.width !== m.canvasW || canvas.height !== m.canvasH) {
                 canvas.width = m.canvasW;
@@ -79,7 +85,7 @@ export function GameCanvas({ state, setState }: Props) {
         });
 
         return () => loop.stop();
-    }, [state, cssSize.w, cssSize.h, dpr, hoverCell]);
+    }, [state, cssSize.w, cssSize.h, dpr, hoverCell, setState]);
 
     // pointer events (и мышь, и тач)
     useEffect(() => {
@@ -129,9 +135,7 @@ export function GameCanvas({ state, setState }: Props) {
                 return;
             }
 
-            // можно строить
             showReason("Построено", 800);
-            // ставим башню (если выбрана)
             setState(prev => placeTower(prev, cell));
         };
 

@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import "./App.css";
 import { GameCanvas } from "../game/canvas/GameCanvas";
-import { createInitialState, setSelectedTower, TOWER_COST } from "../game/model/state";
+import { createInitialState, setSelectedTower, TOWER_COST, startWave, togglePause } from "../game/model/state";
 import type { TowerType } from "../game/model/types";
 import { TOWER_VIEW } from "../game/ui/towerView";
 
@@ -26,7 +26,14 @@ export default function App() {
                 <div className="pill">💰 {state.stats.money}</div>
                 <div className="pill">Wave: {state.stats.wave}</div>
                 <div className="pill">Level: {state.levelId} — {state.levelName}</div>
+                <button onClick={() => setState(prev => startWave(prev))}>
+                    Start Wave
+                </button>
 
+                <button onClick={() => setState(prev => togglePause(prev))}>
+                    {state.mode === "RUNNING" ? "Pause" : "Resume"}
+                </button>
+                <div className="pill">Mode: {state.mode}</div>
             </div>
 
             <div className="main">
