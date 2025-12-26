@@ -1,5 +1,4 @@
 import type { GameState, Cell, Tower } from "../model/types";
-import { cellKey } from "../model/grid";
 import { cellToWorld } from "./metrics";
 import type { Metrics} from "./metrics"
 import { canPlaceTower } from "../model/state";
@@ -174,20 +173,13 @@ function drawPathEndpoints(ctx: CanvasRenderingContext2D, state: GameState, m: M
 }
 
 function drawPath(ctx: CanvasRenderingContext2D, state: GameState, m: Metrics, tSec: number) {
-    const pathSet = new Set(state.path.map(cellKey));
+    for (const c of state.path) {
+        const { x, y } = cellToWorld(m, c);
+        ctx.fillStyle = state.palette.pathFill;
 
-    for (let row = 0; row < state.grid.rows; row++) {
-        for (let col = 0; col < state.grid.cols; col++) {
-            const k = `${col},${row}`;
-            if (!pathSet.has(k)) continue;
-
-            const { x, y } = cellToWorld(m, { col, row });
-            ctx.fillStyle = state.palette.pathFill;
-            const pad = Math.floor(m.cellSize * 0.10);
-            roundRect(ctx, x + pad, y + pad, m.cellSize - pad * 2, m.cellSize - pad * 2, Math.floor(m.cellSize * 0.18));
-            ctx.fill();
-            ctx.stroke();
-        }
+        const pad = Math.floor(m.cellSize * 0.10);
+        roundRect(ctx, x + pad, y + pad, m.cellSize - pad * 2, m.cellSize - pad * 2, Math.floor(m.cellSize * 0.18));
+        ctx.fill();
     }
 
     ctx.save();

@@ -40,6 +40,7 @@ export function createInitialState(): GameState {
     const levelId = p?.levelId ?? 1;
     const level = getLevelDef(levelId);
     validatePath(grid, level.path);
+    const pathSet = new Set(level.path.map(cellKey));
 
     return {
         levelId,
@@ -48,7 +49,7 @@ export function createInitialState(): GameState {
 
         grid,
         path: level.path,
-
+        pathSet,
         towers: [],
         enemies: [],
         bullets: [],
@@ -70,8 +71,7 @@ export function createInitialState(): GameState {
 }
 
 export function isPathCell(state: GameState, cell: Cell): boolean {
-    const set = new Set(state.path.map(cellKey));
-    return set.has(cellKey(cell));
+    return state.pathSet.has(cellKey(cell));
 }
 
 export function towerAt(state: GameState, cell: Cell): Tower | undefined {
@@ -559,6 +559,7 @@ export function sellSelectedTower(state: GameState): GameState {
 export function loadLevel(state: GameState, levelId: number): GameState {
     const level = getLevelDef(levelId);
     validatePath(state.grid, level.path);
+    const pathSet = new Set(level.path.map(cellKey));
 
     return {
         ...state,
@@ -566,7 +567,7 @@ export function loadLevel(state: GameState, levelId: number): GameState {
         levelName: level.name,
         palette: level.palette,
         path: level.path,
-
+        pathSet,
         towers: [],
         enemies: [],
         bullets: [],

@@ -353,3 +353,21 @@ button[aria-pressed="true"] {
     padding: 8px 8px;
   }
 }
+
+@media (max-width: 420px) {
+  .dockRow {
+    flex-wrap: nowrap;
+    gap: 8px;
+  }
+
+  .manageBtns {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    max-width: 65vw; /* чтобы слева pill всегда был виден */
+  }
+
+  .manageBtns::-webkit-scrollbar {
+    display: none;
+  }
+}

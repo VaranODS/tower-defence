@@ -13,7 +13,7 @@ import {
   TOWER_COST,
   togglePause,
   upgradeSelectedTower,
-  goToLevel,
+  goToLevel, getSellRefund,
 } from "../game/model/state";
 import type {GameState, Tower, TowerType} from "../game/model/types";
 import {TOWER_VIEW} from "../game/ui/towerView";
@@ -252,7 +252,7 @@ export default function App() {
               </button>
 
               <button className="btnSmall" onClick={() => dispatch(prev => sellSelectedTower(prev))}>
-                Sell +{Math.floor(selectedTower.invested * 0.7)}
+                Sell +{getSellRefund(selectedTower)}
               </button>
 
               <button className="btnSmall" onClick={() => setSheetTowerId(selectedTower.id)}>

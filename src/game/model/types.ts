@@ -105,6 +105,7 @@ export type GameState = {
 
     grid: GridSize;
     path: Cell[]; // ordered path cells
+    pathSet: ReadonlySet<string>;
     towers: Tower[];
     enemies: Enemy[];
     bullets: Bullet[];
