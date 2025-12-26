@@ -8,7 +8,7 @@ export function getWaveQueue(waveNumber: number): SpawnUnit[] {
     const w = Math.max(1, waveNumber);
 
     // базовое количество врагов растёт
-    const baseCount = 8 + Math.floor(w * 1.6);
+    const baseCount = 10 + Math.floor(w * 2.0);
 
     // доли типов (плавно)
     const tankRate = clamp((w - 2) * 0.05, 0, 0.35);     // до 35%
@@ -28,7 +28,7 @@ export function getWaveQueue(waveNumber: number): SpawnUnit[] {
 
     // каждая 5-я волна — босс
     if (w % 5 === 0) {
-        queue.push({ type: "TANK_BOSS", hpMult: 4, speedMult: 0.85, rewardMult: 4 });
+        queue.push({ type: "TANK_BOSS", hpMult: 6, speedMult: 0.9, rewardMult: 5 });
     }
 
     return queue;

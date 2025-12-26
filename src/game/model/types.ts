@@ -29,14 +29,15 @@ export type Enemy = {
 
     speedCellsPerSec: number;
     reward: number;
+    leakDamage: number;
 
     // прогресс по пути: 0..(path.length-1)
     // i = floor(progress) — индекс клетки в path
+
     progress: number;
-
     slowMul: number;        // 1.0 = нет замедления, 0.65 = -35% скорости
-    slowTimerSec: number;   // сколько ещё действует
 
+    slowTimerSec: number;   // сколько ещё действует
     isBoss: boolean;
 };
 

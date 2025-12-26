@@ -6,12 +6,13 @@ type EnemyDef = {
     speed: number;
     reward: number;
     shield?: number;
+    leakDamage: number;
 };
 
 const DEF: Record<EnemyType, EnemyDef> = {
-    RUNNER: { hp: 30, speed: 1.25, reward: 6 },
-    TANK: { hp: 120, speed: 0.65, reward: 14 },
-    SHIELDED: { hp: 70, speed: 0.9, reward: 10, shield: 40 },
+    RUNNER: { hp: 34, speed: 1.3, reward: 5, leakDamage: 1 },
+    TANK: { hp: 140, speed: 0.7, reward: 12, leakDamage: 2 },
+    SHIELDED: { hp: 78, speed: 0.95, reward: 9, shield: 50, leakDamage: 1 },
 };
 
 export function createEnemy(type: EnemyType): Enemy {
@@ -27,6 +28,7 @@ export function createEnemy(type: EnemyType): Enemy {
         maxShield: shield,
         speedCellsPerSec: d.speed,
         reward: d.reward,
+        leakDamage: d.leakDamage,
         progress: 0,
         slowMul: 1,
         slowTimerSec: 0,
@@ -49,6 +51,7 @@ export function createBossTank(hpMult: number, speedMult: number, rewardMult: nu
         maxShield: 0,
         speedCellsPerSec: speed,
         reward,
+        leakDamage: 5,
         progress: 0,
         slowMul: 1,
         slowTimerSec: 0,

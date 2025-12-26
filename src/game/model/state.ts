@@ -24,14 +24,14 @@ export const DEFAULT_GRID: GridSize = {cols: 12, rows: 18};
 
 export const TOWER_COST: Record<TowerType, number> = {
     CANNON: 50,
-    FROST: 65,
-    SNIPER: 90,
+    FROST: 85,
+    SNIPER: 120,
 };
 
-export const START_MONEY = 120;
-export const START_BASE_HP = 20;
+export const START_MONEY = 95;
+export const START_BASE_HP = 16;
 
-const SELL_REFUND_MULT = 0.7;  // возврат = 70% от вложенного
+const SELL_REFUND_MULT = 0.6;  // возврат = 70% от вложенного
 
 export function createInitialState(): GameState {
     const grid = DEFAULT_GRID;
@@ -181,14 +181,23 @@ function spawnStep(state: GameState, dtSec: number): GameState {
     let timer = state.waveState.spawnTimerSec - dtSec;
     const queue = state.waveState.queue.slice();
     const enemies = state.enemies.slice();
+    const w = state.stats.waveInLevel;
+    const lv = state.levelId;
+
+    const hpMult = 1 + (lv - 1) * 0.18 + (w - 1) * 0.11;
+    const shieldMult = 1 + (lv - 1) * 0.14 + (w - 1) * 0.09;
+    const speedMult = 1 + (lv - 1) * 0.02 + (w - 1) * 0.01;
+    const rewardMult = 1 + (lv - 1) * 0.05 + (w - 1) * 0.02;
 
     while (timer <= 0 && queue.length > 0) {
         const unit = queue.shift() as SpawnUnit;
 
         if (unit.type === "TANK_BOSS") {
-            enemies.push(createBossTank(unit.hpMult, unit.speedMult, unit.rewardMult));
+            const boss = createBossTank(unit.hpMult, unit.speedMult, unit.rewardMult);
+            enemies.push(scaleEnemy(boss, hpMult, shieldMult, speedMult, rewardMult));
         } else {
-            enemies.push(createEnemy(unit.type));
+            const e = createEnemy(unit.type);
+            enemies.push(scaleEnemy(e, hpMult, shieldMult, speedMult, rewardMult));
         }
 
         timer += state.waveState.spawnIntervalSec;
@@ -218,7 +227,7 @@ function moveEnemies(state: GameState, dtSec: number): GameState {
 
         if (newProg >= maxProgress) {
             // дошёл до конца
-            baseHp -= 1;
+            baseHp -= e.leakDamage;
             continue;
         }
 
@@ -316,8 +325,12 @@ function towersAndBullets(state: GameState, dtSec: number): GameState {
 
                 // применяем замедление (если у пули оно есть)
                 if (b.slowMul !== undefined && b.slowDurationSec !== undefined) {
-                    const stronger = Math.min(updated.slowMul, b.slowMul); // меньше = сильнее замедление
-                    const newMul = Math.min(stronger, b.slowMul);
+                    const incoming = b.slowMul;
+                    const bossResist = updated.isBoss ? 0.55 : 1; // 0.55 = босс “съедает” часть замедления
+                    const effective = 1 - (1 - incoming) * bossResist;
+
+                    const stronger = Math.min(updated.slowMul, effective);
+                    const newMul = Math.min(stronger, effective);
 
                     const newTimer = Math.max(updated.slowTimerSec, b.slowDurationSec);
 
@@ -438,6 +451,32 @@ function applyDamage(e: Enemy, dmg: number): { enemy: Enemy; dead: boolean } {
     return {enemy, dead: enemy.hp <= 0};
 }
 
+function scaleEnemy(
+  e: Enemy,
+  hpMult: number,
+  shieldMult: number,
+  speedMult: number,
+  rewardMult: number
+): Enemy {
+    const hp = Math.max(1, Math.round(e.maxHp * hpMult));
+    const shield = Math.max(0, Math.round(e.maxShield * shieldMult));
+    const speed = e.speedCellsPerSec * speedMult;
+
+    // награда растёт, но сильно слабее, чем HP (чтобы не разгонять экономику)
+    const reward = Math.max(1, Math.round(e.reward * rewardMult));
+
+    return {
+        ...e,
+        hp,
+        maxHp: hp,
+        shield,
+        maxShield: shield,
+        speedCellsPerSec: speed,
+        reward,
+    };
+}
+
+
 function pickTargetInRangeByPriority(
     state: GameState,
     towerType: TowerType,
@@ -488,7 +527,7 @@ export function clearPlacement(state: GameState): GameState {
 
 export function getUpgradeCost(type: TowerType, nextLevel: 2 | 3): number {
     const base =TOWER_COST[type];
-    const raw = nextLevel === 2 ? base * 1.2 : base * 1.6;
+    const raw = nextLevel === 2 ? base * 1.75 : base * 2.65;
     return Math.ceil(raw);
 }
 
