@@ -90,7 +90,13 @@ export type WaveState = {
     queue: SpawnUnit[];        // кого осталось заспавнить
     spawnTimerSec: number;     // таймер между спавнами
     spawnIntervalSec: number;  // например 0.6
+    intermissionSec: number; // ожидание перед следующей волной (например 4)
 };
+
+export type EndScreen =
+    | { kind: "GAME_OVER" }
+    | { kind: "ALL_LEVELS_COMPLETE" }
+    | null;
 
 export type GameState = {
     levelId: number;
@@ -108,6 +114,6 @@ export type GameState = {
     stats: GameStats;
     mode: GameMode;
     placement: Placement;
-
+    endScreen: EndScreen;
     selectedTowerId: string | null; // выбранная на поле башня для меню
 };

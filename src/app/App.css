@@ -10,19 +10,86 @@
 }
 
 .topbar {
-  display: flex;
-  gap: 12px;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 10px;
   align-items: center;
   padding: 10px 12px;
-  background: rgba(255,255,255,0.06);
-  backdrop-filter: blur(6px);
 }
 
-.topbar .pill {
-  padding: 6px 10px;
-  border-radius: 999px;
-  background: rgba(255,255,255,0.08);
-  font-size: 14px;
+.dock {
+  padding: 10px 12px;
+  border-top: 1px solid rgba(255,255,255,0.08);
+  background: rgba(10,12,18,0.65);
+  backdrop-filter: blur(10px);
+}
+
+.dockRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.sheetOverlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.45);
+  z-index: 60;
+  display: flex;
+  justify-content: center;
+  align-items: flex-end;
+}
+
+.sheet {
+  width: 100%;
+  max-width: 720px;
+  max-height: 58vh;              /* важно: не съедаем весь экран */
+  overflow: auto;                /* статы скроллятся */
+  border-radius: 16px 16px 0 0;
+  background: rgba(20,22,30,0.92);
+  backdrop-filter: blur(12px);
+  padding: 12px 12px calc(12px + env(safe-area-inset-bottom));
+  border: 1px solid rgba(255,255,255,0.10);
+}
+
+.sheetHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.sheetTitle {
+  font-weight: 900;
+  font-size: 16px;
+}
+
+.topbarStats {
+  display: flex;
+  flex-wrap: wrap;        /* ключевое */
+  gap: 8px;
+  min-width: 0;           /* чтобы 1fr реально сжимался */
+}
+
+.topbarActions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;         /* кнопки не схлопываем */
+}
+
+.pill {
+  max-width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis; /* если совсем не влезает */
+}
+
+.pillSub {
+  opacity: 0.85;
+  margin-left: 6px;
+  font-weight: 600;
 }
 
 .main {
@@ -35,16 +102,84 @@
 
 .bottombar {
   padding: 10px 12px;
-  background: rgba(255,255,255,0.06);
-  display: flex;
-  gap: 10px;
-  align-items: center;
-  justify-content: space-between;
+  border-top: 1px solid rgba(255,255,255,0.08);
 }
 
 .shop {
   display: flex;
   gap: 10px;
+}
+
+.shopRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.shopHint {
+  margin-left: auto;
+  opacity: 0.85;
+  font-weight: 600;
+  font-size: 14px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.manageWrap {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+}
+
+.manageTop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+}
+
+.manageBtns {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.manageStats {
+  display: grid;
+  gap: 6px;
+}
+
+.statRow {
+  display: grid;
+  grid-template-columns: 70px 1fr 16px 1fr;
+  gap: 8px;
+  align-items: center;
+  padding: 8px 10px;
+  border-radius: 12px;
+  background: rgba(255,255,255,0.04);
+}
+
+.statLabel {
+  opacity: 0.85;
+  font-weight: 800;
+  font-size: 12px;
+}
+
+.statVal {
+  font-weight: 700;
+  font-size: 13px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.statArrow {
+  opacity: 0.75;
+  text-align: center;
 }
 
 button {
@@ -84,4 +219,137 @@ button[aria-pressed="true"] {
 
 .shop button[aria-pressed="true"] {
   outline: 2px solid rgba(120, 220, 255, 0.9);
+}
+
+/* компактные кнопки под мобилку */
+.btnSmall {
+  padding: 8px 10px;
+  border-radius: 12px;
+  font-weight: 700;
+  font-size: 14px;
+}
+
+.levelOverlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.55);
+  z-index: 80;
+  display: grid;
+  place-items: center;
+  padding: 14px;
+}
+
+.levelModal {
+  width: min(720px, 96vw);
+  max-height: min(80vh, 700px);
+  overflow: auto;
+  border-radius: 16px;
+  padding: 12px;
+  background: rgba(20,22,30,0.92);
+  border: 1px solid rgba(255,255,255,0.10);
+  backdrop-filter: blur(12px);
+}
+
+.levelHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.levelTitle {
+  font-weight: 900;
+  font-size: 16px;
+  color: rgba(255,255,255,0.95);
+}
+
+.levelGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.levelCard {
+  text-align: left;
+  padding: 10px 10px;
+  border-radius: 14px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.08);
+  color: rgba(255,255,255,0.92);
+}
+
+.levelCardActive {
+  outline: 2px solid rgba(255,255,255,0.20);
+}
+
+.levelCardTop {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+
+.levelBadge {
+  font-weight: 900;
+  font-size: 12px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.08);
+}
+
+.levelName {
+  font-weight: 800;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.levelMeta {
+  opacity: 0.85;
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.levelFooter {
+  margin-top: 10px;
+}
+
+.levelHint {
+  opacity: 0.85;
+  font-weight: 600;
+  font-size: 13px;
+}
+
+@media (max-width: 420px) {
+  .levelGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+
+/* очень узкие экраны: кнопки под статистикой */
+@media (max-width: 420px) {
+  .topbar {
+    grid-template-columns: 1fr; /* одна колонка */
+  }
+  .topbarActions {
+    justify-content: flex-end;
+  }
+}
+
+/* мобилка: превращаем магазин в компактный dock */
+@media (max-width: 420px) {
+  .shopRow {
+    justify-content: space-between;
+  }
+
+  .shopHint {
+    display: none;
+  }
+
+  .statRow {
+    grid-template-columns: 64px 1fr 14px 1fr;
+    padding: 8px 8px;
+  }
 }

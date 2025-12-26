@@ -11,20 +11,20 @@ import { getTowerParams} from "../model/towerParams";
 export function draw(ctx: CanvasRenderingContext2D, state: GameState, m: Metrics, hoverCell: Cell | null) {
     ctx.clearRect(0, 0, m.canvasW, m.canvasH);
 
+    const tSec = performance.now() / 1000;
+
     // фон из палитры уровня
     ctx.fillStyle = state.palette.bg;
     ctx.fillRect(0, 0, m.canvasW, m.canvasH);
 
     drawGrid(ctx, state, m);
-    drawPath(ctx, state, m);
+    drawPath(ctx, state, m, tSec);
     drawEnemies(ctx, state, m);
     drawBullets(ctx, state, m);
     drawRange(ctx, state, m, hoverCell);
     drawTowers(ctx, state, m);
 
     if (hoverCell) drawHover(ctx, state, m, hoverCell);
-
-    drawStartFinish(ctx, state, m);
 }
 
 function drawGrid(ctx: CanvasRenderingContext2D, state: GameState, m: Metrics) {
@@ -51,7 +51,129 @@ function drawGrid(ctx: CanvasRenderingContext2D, state: GameState, m: Metrics) {
     ctx.restore();
 }
 
-function drawPath(ctx: CanvasRenderingContext2D, state: GameState, m: Metrics) {
+function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
+    const rr = Math.min(r, w / 2, h / 2);
+    ctx.beginPath();
+    ctx.moveTo(x + rr, y);
+    ctx.arcTo(x + w, y, x + w, y + h, rr);
+    ctx.arcTo(x + w, y + h, x, y + h, rr);
+    ctx.arcTo(x, y + h, x, y, rr);
+    ctx.arcTo(x, y, x + w, y, rr);
+    ctx.closePath();
+}
+
+function drawPathArrows(ctx: CanvasRenderingContext2D, state: GameState, m: Metrics) {
+    const step = 4; // каждые 4 клетки
+    const size = Math.max(6 * m.dpr, Math.floor(m.cellSize * 0.18));
+
+    ctx.save();
+    ctx.fillStyle = "rgba(255,255,255,0.38)";
+
+    for (let i = 0; i + 1 < state.path.length; i += step) {
+        const a = state.path[i];
+        const b = state.path[i + 1];
+
+        const ax = m.boardX + (a.col + 0.5) * m.cellSize;
+        const ay = m.boardY + (a.row + 0.5) * m.cellSize;
+        const bx = m.boardX + (b.col + 0.5) * m.cellSize;
+        const by = m.boardY + (b.row + 0.5) * m.cellSize;
+
+        const dx = bx - ax;
+        const dy = by - ay;
+        const len = Math.hypot(dx, dy);
+        if (len < 1e-6) continue;
+
+        const ux = dx / len;
+        const uy = dy / len;
+
+        // центр стрелки — на клетке i
+        const cx = ax;
+        const cy = ay;
+
+        // треугольник
+        const tipX = cx + ux * size;
+        const tipY = cy + uy * size;
+        const leftX = cx + (-uy) * (size * 0.55);
+        const leftY = cy + (ux) * (size * 0.55);
+        const rightX = cx + (uy) * (size * 0.55);
+        const rightY = cy + (-ux) * (size * 0.55);
+
+        ctx.beginPath();
+        ctx.moveTo(tipX, tipY);
+        ctx.lineTo(leftX, leftY);
+        ctx.lineTo(rightX, rightY);
+        ctx.closePath();
+        ctx.fill();
+    }
+
+    ctx.restore();
+}
+
+function drawPathSparks(ctx: CanvasRenderingContext2D, state: GameState, m: Metrics, tSec: number) {
+    if (state.path.length < 2) return;
+
+    const speed = 2.2; // клеток/сек
+    const count = 3;   // искр одновременно
+
+    ctx.save();
+    ctx.fillStyle = "rgba(255,255,255,0.55)";
+
+    for (let k = 0; k < count; k++) {
+        const p = (tSec * speed + k * (state.path.length / count)) % (state.path.length - 1);
+
+        const i = Math.floor(p);
+        const t = p - i;
+
+        const a = state.path[i];
+        const b = state.path[i + 1];
+
+        const ax = (a.col + 0.5);
+        const ay = (a.row + 0.5);
+        const bx = (b.col + 0.5);
+        const by = (b.row + 0.5);
+
+        const cx = m.boardX + (ax + (bx - ax) * t) * m.cellSize;
+        const cy = m.boardY + (ay + (by - ay) * t) * m.cellSize;
+
+        const r = Math.max(2 * m.dpr, Math.floor(m.cellSize * 0.06));
+        ctx.beginPath();
+        ctx.arc(cx, cy, r, 0, Math.PI * 2);
+        ctx.fill();
+    }
+
+    ctx.restore();
+}
+
+function drawPathEndpoints(ctx: CanvasRenderingContext2D, state: GameState, m: Metrics) {
+    const start = state.path[0];
+    const end = state.path[state.path.length - 1];
+    if (!start || !end) return;
+
+    const drawTag = (c: { col: number; row: number }, text: string, color: string) => {
+        const x = m.boardX + (c.col + 0.5) * m.cellSize;
+        const y = m.boardY + (c.row + 0.5) * m.cellSize;
+
+        ctx.save();
+        ctx.font = `${Math.max(12 * m.dpr, Math.floor(m.cellSize * 0.22))}px system-ui`;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+
+        ctx.fillStyle = "rgba(0,0,0,0.45)";
+        const w = Math.max(34 * m.dpr, Math.floor(m.cellSize * 0.8));
+        const h = Math.max(18 * m.dpr, Math.floor(m.cellSize * 0.34));
+        roundRect(ctx, x - w / 2, y - h / 2, w, h, Math.floor(h * 0.45));
+        ctx.fill();
+
+        ctx.fillStyle = color;
+        ctx.fillText(text, x, y);
+        ctx.restore();
+    };
+
+    drawTag(start, "IN", "rgba(120,255,160,0.85)");
+    drawTag(end, "OUT", "rgba(255,120,120,0.85)");
+}
+
+function drawPath(ctx: CanvasRenderingContext2D, state: GameState, m: Metrics, tSec: number) {
     const pathSet = new Set(state.path.map(cellKey));
 
     for (let row = 0; row < state.grid.rows; row++) {
@@ -61,25 +183,36 @@ function drawPath(ctx: CanvasRenderingContext2D, state: GameState, m: Metrics) {
 
             const { x, y } = cellToWorld(m, { col, row });
             ctx.fillStyle = state.palette.pathFill;
-            ctx.fillRect(x, y, m.cellSize, m.cellSize);
+            const pad = Math.floor(m.cellSize * 0.10);
+            roundRect(ctx, x + pad, y + pad, m.cellSize - pad * 2, m.cellSize - pad * 2, Math.floor(m.cellSize * 0.18));
+            ctx.fill();
+            ctx.stroke();
         }
     }
 
     ctx.save();
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
     ctx.strokeStyle = state.palette.pathStroke;
-    ctx.lineWidth = 2 * m.dpr;
+    ctx.lineWidth = Math.max(3 * m.dpr, Math.floor(m.cellSize * 0.14));
+    ctx.shadowColor = state.palette.pathStroke;
+    ctx.shadowBlur = Math.max(6 * m.dpr, Math.floor(m.cellSize * 0.18));
     ctx.beginPath();
 
     for (let i = 0; i < state.path.length; i++) {
-        const cell = state.path[i];
-        const p = cellToWorld(m, cell);
-        const cx = p.x + m.cellSize / 2;
-        const cy = p.y + m.cellSize / 2;
-        if (i === 0) ctx.moveTo(cx, cy);
-        else ctx.lineTo(cx, cy);
+        const c = state.path[i];
+        const px = m.boardX + (c.col + 0.5) * m.cellSize;
+        const py = m.boardY + (c.row + 0.5) * m.cellSize;
+        if (i === 0) ctx.moveTo(px, py);
+        else ctx.lineTo(px, py);
     }
     ctx.stroke();
     ctx.restore();
+
+    drawPathArrows(ctx, state, m);
+    drawPathSparks(ctx, state, m, tSec);
+    drawPathEndpoints(ctx, state, m);
+
 }
 
 function drawEnemies(ctx: CanvasRenderingContext2D, state: GameState, m: Metrics) {
@@ -153,10 +286,6 @@ function drawEnemies(ctx: CanvasRenderingContext2D, state: GameState, m: Metrics
             ctx.textAlign = "center";
             ctx.textBaseline = "bottom";
             ctx.fillText("👑", x, y - r * 0.95);
-
-            // ctx.font = `${Math.floor(r * 0.38)}px system-ui`;
-            // ctx.textBaseline = "top";
-            // ctx.fillText("BOSS", x, y + r * 0.65);
 
             // крупнее + с обводкой, чтобы читалось на любом фоне
             const bossFont = Math.max(14 * m.dpr, Math.floor(r * 0.60));
@@ -306,26 +435,6 @@ function drawHover(ctx: CanvasRenderingContext2D, state: GameState, m: Metrics, 
         ctx.textBaseline = "top";
         ctx.fillStyle = "rgba(255,255,255,0.85)";
     }
-
-    ctx.restore();
-}
-
-function drawStartFinish(ctx: CanvasRenderingContext2D, state: GameState, m: Metrics) {
-    const start = state.path[0];
-    const end = state.path[state.path.length - 1];
-    const s = cellToWorld(m, start);
-    const e = cellToWorld(m, end);
-
-    ctx.save();
-    ctx.font = `${Math.floor(m.cellSize * 0.24)}px system-ui`;
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-
-    ctx.fillStyle = "rgba(120,255,160,0.85)";
-    ctx.fillText("IN", s.x + m.cellSize / 2, s.y + m.cellSize / 2);
-
-    ctx.fillStyle = "rgba(255,120,120,0.85)";
-    ctx.fillText("OUT", e.x + m.cellSize / 2, e.y + m.cellSize / 2);
 
     ctx.restore();
 }

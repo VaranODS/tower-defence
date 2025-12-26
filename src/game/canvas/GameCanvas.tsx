@@ -8,11 +8,12 @@ import { inBounds } from "../model/grid";
 import {placeTower, canPlaceTower, step, towerAt, setSelectedTowerId, clearPlacement} from "../model/state";
 
 type Props = {
-    state: GameState;
-    setState: React.Dispatch<React.SetStateAction<GameState>>;
+    stateRef: React.RefObject<GameState>;
+    dispatch: (reduce: (s: GameState) => GameState) => void;
+    syncUi: (s: GameState) => void; // throttled обновление UI
 };
 
-export function GameCanvas({ state, setState }: Props) {
+export function GameCanvas({ stateRef, dispatch, syncUi }: Props) {
     const wrapRef = useRef<HTMLDivElement | null>(null);
     const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
@@ -69,23 +70,39 @@ export function GameCanvas({ state, setState }: Props) {
         const ctx = canvas.getContext("2d");
         if (!ctx) return;
 
+        let uiTimer = 0;
+
         const loop = startLoop((dtMs) => {
             const dtSec = Math.min(0.05, dtMs / 1000);
 
-            //Обновление мира
-            setState(prev => step(prev, dtSec));
+            const current = stateRef.current;
+            if (!current) return;
+
+            // Обновление мира в ref
+            const next = step(current, dtSec);
+            stateRef.current = next;
+
+            // //Обновление мира
+            // setState(prev => step(prev, dtSec));
 
             // рисование будет на следующем рендере с новым state
-            const m = computeMetrics(state.grid, cssSize.w, cssSize.h, dpr);
+            const m = computeMetrics(next.grid, cssSize.w, cssSize.h, dpr);
             if (canvas.width !== m.canvasW || canvas.height !== m.canvasH) {
                 canvas.width = m.canvasW;
                 canvas.height = m.canvasH;
             }
-            draw(ctx, state, m, hoverCell);
+            draw(ctx, next, m, hoverCell);
+
+            // UI обновляем редко (например 4 раза/сек)
+            uiTimer += dtSec;
+            if (uiTimer >= 0.25) {
+                uiTimer = 0;
+                syncUi(next);
+            }
         });
 
         return () => loop.stop();
-    }, [state, cssSize.w, cssSize.h, dpr, hoverCell, setState]);
+    }, [cssSize.w, cssSize.h, dpr, hoverCell, stateRef, syncUi]);
 
     // pointer events (и мышь, и тач)
     useEffect(() => {
@@ -93,20 +110,23 @@ export function GameCanvas({ state, setState }: Props) {
         if (!canvas) return;
 
         const onMove = (e: PointerEvent) => {
-            const m = computeMetrics(state.grid, cssSize.w, cssSize.h, dpr);
+            const s = stateRef.current;
+            if (!s) return;
+
+            const m = computeMetrics(s.grid, cssSize.w, cssSize.h, dpr);
             const p = getCanvasPointerPos(e, canvas);
             const cell = worldToCell(m, p.x, p.y);
-            if (!cell || !inBounds(state.grid, cell)) {
+            if (!cell || !inBounds(s.grid, cell)) {
                 setHoverCell(null);
                 return;
             }
             setHoverCell(cell);
 
-            const selected = state.placement.selectedTower;
+            const selected = s.placement.selectedTower;
             if (!selected) {
                 showReason(null);
             } else {
-                const check = canPlaceTower(state, cell);
+                const check = canPlaceTower(s, cell);
                 showReason(check.ok ? null : (check.reason ?? "Нельзя строить"));
             }
         };
@@ -115,27 +135,30 @@ export function GameCanvas({ state, setState }: Props) {
             // чтобы браузер не превращал это в скролл/зум
             e.preventDefault();
 
-            const m = computeMetrics(state.grid, cssSize.w, cssSize.h, dpr);
+            const s = stateRef.current;
+            if (!s) return;
+
+            const m = computeMetrics(s.grid, cssSize.w, cssSize.h, dpr);
             const p = getCanvasPointerPos(e, canvas);
             const cell = worldToCell(m, p.x, p.y);
-            if (!cell || !inBounds(state.grid, cell)) return;
+            if (!cell || !inBounds(s.grid, cell)) return;
 
             // 1) если тапнули по башне — выбираем её
-            const tappedTower = towerAt(state, cell);
+            const tappedTower = towerAt(s, cell);
             if (tappedTower) {
-                setState(prev => ({
+                dispatch(prev => ({
                     ...setSelectedTowerId(prev, tappedTower.id), placement: { selectedTower: null }
                 }));
                 return;
             }
 
             // если тапнули мимо башни — снимаем выбор башни
-            setState(prev => setSelectedTowerId(prev, null));
+            dispatch(prev => setSelectedTowerId(prev, null));
 
             // 2) если выбран тип башни — пробуем поставить
-            const selectedType = state.placement.selectedTower;
+            const selectedType = s.placement.selectedTower;
             if (selectedType) {
-                const check = canPlaceTower(state, cell);
+                const check = canPlaceTower(s, cell);
 
                 if (!check.ok) {
                     showReason(check.reason ?? "Нельзя строить", 1500);
@@ -143,12 +166,12 @@ export function GameCanvas({ state, setState }: Props) {
                 }
 
                 showReason("Построено", 800);
-                setState(prev => placeTower(prev, cell));
+                dispatch(prev => placeTower(prev, cell));
                 return;
             }
 
             // 3) иначе — просто очистим режим установки (на всякий)
-            setState(prev => clearPlacement(prev));
+            dispatch(prev => clearPlacement(prev));
 
             setHoverCell(cell);
 
@@ -161,7 +184,7 @@ export function GameCanvas({ state, setState }: Props) {
             canvas.removeEventListener("pointermove", onMove);
             canvas.removeEventListener("pointerdown", onDown);
         };
-    }, [state, cssSize.w, cssSize.h, dpr, setState]);
+    }, [cssSize.w, cssSize.h, dpr, stateRef, dispatch]);
 
     return (
         <div ref={wrapRef} style={{ width: "100%", height: "100%", flex: 1, position: "relative" }}>

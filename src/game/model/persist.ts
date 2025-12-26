@@ -24,6 +24,10 @@ export function saveProgress(p: Progress) {
     }
 }
 
+export function resetProgress() {
+    saveProgress({ levelId: 1 });
+}
+
 function isProgress(x: unknown): x is Progress {
     if (typeof x !== "object" || x === null) return false;
     const v = x as Record<string, unknown>;

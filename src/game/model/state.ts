@@ -9,7 +9,7 @@
     WaveStatus,
 } from "./types";
 import {cellKey, inBounds} from "./grid";
-import {getLevelDef} from "./levels";
+import {getFirstLevelId, getLevelDef, hasLevel} from "./levels";
 import {makeId} from "./id";
 import {createEnemy, createBossTank} from "./enemies";
 import {getWaveQueue} from "./waves";
@@ -17,7 +17,8 @@ import {posOnPath, cellCenter} from "./coords";
 import {getTowerParams} from "./towerParams";
 
 import type {SpawnUnit} from "./waves";
-import {loadProgress} from "./persist";
+import {loadProgress, resetProgress} from "./persist";
+import {validatePath} from "./pathValidate.ts";
 
 export const DEFAULT_GRID: GridSize = {cols: 12, rows: 18};
 
@@ -27,6 +28,9 @@ export const TOWER_COST: Record<TowerType, number> = {
     SNIPER: 90,
 };
 
+export const START_MONEY = 120;
+export const START_BASE_HP = 20;
+
 const SELL_REFUND_MULT = 0.7;  // возврат = 70% от вложенного
 
 export function createInitialState(): GameState {
@@ -35,6 +39,7 @@ export function createInitialState(): GameState {
     const p = loadProgress();
     const levelId = p?.levelId ?? 1;
     const level = getLevelDef(levelId);
+    validatePath(grid, level.path);
 
     return {
         levelId,
@@ -42,7 +47,7 @@ export function createInitialState(): GameState {
         palette: level.palette,
 
         grid,
-        path: level.buildPath(grid),
+        path: level.path,
 
         towers: [],
         enemies: [],
@@ -53,11 +58,13 @@ export function createInitialState(): GameState {
             queue: [],
             spawnTimerSec: 0,
             spawnIntervalSec: 0.6,
+            intermissionSec: 0,
         },
 
-        stats: {baseHp: 20, money: 120, waveInLevel: 1},
+        stats: {baseHp: START_BASE_HP, money: START_MONEY, waveInLevel: 1},
         mode: "IDLE",
         placement: {selectedTower: null},
+        endScreen: null,
         selectedTowerId: null,
     };
 }
@@ -157,9 +164,12 @@ export function step(state: GameState, dtSec: number): GameState {
     // 4) окончание волны
     next = waveCompletion(next);
 
-    // 5) game over
+    // 5) автостарт следующей волны
+    next = autoStartWaveIfNeeded(next, dtSec);
+
+    // 6) game over
     if (next.stats.baseHp <= 0) {
-        return {...next, mode: "GAME_OVER"};
+        return resetGame(next, "GAME_OVER");
     }
 
     return next;
@@ -395,9 +405,9 @@ function waveCompletion(state: GameState): GameState {
     // следующий раунд
     return {
         ...state,
-        waveState: { ...state.waveState, status: "READY", queue: [], spawnTimerSec: 0 },
+        waveState: { ...state.waveState, status: "READY", queue: [], spawnTimerSec: 0, intermissionSec: 4 },
         stats: { ...state.stats, waveInLevel: nextWave },
-        mode: "PAUSED",
+        mode: "RUNNING",
     };
 }
 
@@ -548,13 +558,14 @@ export function sellSelectedTower(state: GameState): GameState {
 
 export function loadLevel(state: GameState, levelId: number): GameState {
     const level = getLevelDef(levelId);
+    validatePath(state.grid, level.path);
 
     return {
         ...state,
         levelId,
         levelName: level.name,
         palette: level.palette,
-        path: level.buildPath(state.grid),
+        path: level.path,
 
         towers: [],
         enemies: [],
@@ -571,6 +582,86 @@ export function loadLevel(state: GameState, levelId: number): GameState {
 
 export function nextLevel(state: GameState): GameState {
     const nextId = state.levelId + 1;
+    if (!hasLevel(nextId)) {
+        return resetGame(state, "ALL_LEVELS_COMPLETE");
+    }
     return loadLevel(state, nextId);
 }
 
+function autoStartWaveIfNeeded(state: GameState, dtSec: number): GameState {
+    if (state.mode !== "RUNNING") return state;
+    if (state.waveState.status !== "READY") return state;
+    if (state.waveState.intermissionSec <= 0) return state;
+
+    const left = Math.max(0, state.waveState.intermissionSec - dtSec);
+
+    // ещё ждём
+    if (left > 0) {
+        return { ...state, waveState: { ...state.waveState, intermissionSec: left } };
+    }
+
+    // стартуем новую волну
+    const queue = getWaveQueue(state.stats.waveInLevel);
+    const interval = Math.max(0.35, 0.65 - state.stats.waveInLevel * 0.02);
+
+    return {
+        ...state,
+        waveState: {
+            ...state.waveState,
+            status: "SPAWNING",
+            queue,
+            spawnTimerSec: 0,
+            spawnIntervalSec: interval,
+            intermissionSec: 0,
+        },
+    };
+}
+
+export function resetGame(
+    state: GameState,
+    endScreen: "GAME_OVER" | "ALL_LEVELS_COMPLETE" | null
+): GameState {
+    // сбрасываем localStorage
+    resetProgress();
+
+    // загружаем первый уровень
+    const base = loadLevel(state, getFirstLevelId());
+
+    return {
+        ...base,
+        stats: {
+            ...base.stats,
+            money: START_MONEY,
+            baseHp: START_BASE_HP,
+            waveInLevel: 1,
+        },
+        endScreen: endScreen ? { kind: endScreen } : null,
+        mode: "IDLE",
+    };
+}
+
+export function getSellRefund(t: Tower): number {
+    return Math.floor(t.invested * SELL_REFUND_MULT);
+}
+
+export function goToLevel(state: GameState, levelId: number): GameState {
+    const def = getLevelDef(levelId);
+
+    const base = loadLevel(state, def.id);
+
+    return {
+        ...base,
+        mode: "IDLE",
+        endScreen: null,
+        selectedTowerId: null,
+        placement: { selectedTower: null },
+
+        // важно: тест уровня начинаем "как новую игру"
+        stats: {
+            ...base.stats,
+            money: START_MONEY,
+            baseHp: START_BASE_HP,
+            waveInLevel: 1,
+        },
+    };
+}
