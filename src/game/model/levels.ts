@@ -125,11 +125,11 @@ const LEVELS: Record<number, LevelDef> = {
     name: "Камеры",
     wavesPerLevel: 9,
     palette: {
-      bg: "#130a12",
-      grid: "rgba(255,255,255,0.10)",
-      pathFill: "rgba(255, 120, 200, 0.12)",
-      pathStroke: "rgba(255, 120, 200, 0.40)",
-      towerFill: "rgba(160, 255, 200, 0.12)",
+      bg: "#0a0710",
+      grid: "rgba(255,255,255,0.06)",
+      pathFill: "rgba(200, 90, 170, 0.10)",
+      pathStroke: "rgba(200, 90, 170, 0.34)",
+      towerFill: "rgba(120, 210, 170, 0.10)",
     },
     path: path(`
       5,0 5,1 5,2 5,3 5,4
